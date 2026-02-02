@@ -849,3 +849,60 @@ input:focus {
 .app-footer:hover {
     opacity: 1;
 }
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 480px) {
+    .app-container {
+        padding: 10px 15px 120px;
+    }
+
+    .card-glass {
+        padding: 24px 20px;
+        border-radius: 20px;
+    }
+
+    h1 {
+        font-size: 2rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+
+    .code-display {
+        font-size: 2.8rem;
+    }
+
+    .result-number {
+        font-size: 3rem;
+    }
+
+    .audio-call-bar {
+        min-width: 90%;
+        padding: 0.75rem 1.25rem;
+        gap: 1rem;
+        bottom: 1.5rem;
+    }
+
+    .mic-btn {
+        padding: 0.5rem 1rem;
+    }
+}
+
+@media (max-width: 380px) {
+    h1 {
+        font-size: 1.75rem;
+    }
+
+    .code-display {
+        font-size: 2.2rem;
+    }
+
+    .mic-label {
+        display: none;
+    }
+
+    .audio-call-bar {
+        padding: 0.6rem 1rem;
+    }
+}

@@ -476,115 +476,117 @@ function setupPeerConnection() {
 }
 
 // Socket Events for Mic System
-socket.on('remote-mic-update', ({ status, player }) => {
-    console.log(`📡 Remote mic update from ${player.name}: ${status}`);
-    const wasRemoteMicOn = remoteMicOn;
-    remoteMicOn = (status === 'ON');
+if (socket) {
+    socket.on('remote-mic-update', ({ status, player }) => {
+        console.log(`📡 Remote mic update from ${player.name}: ${status}`);
+        const wasRemoteMicOn = remoteMicOn;
+        remoteMicOn = (status === 'ON');
 
-    if (remoteMicOn && !wasRemoteMicOn) {
-        // Remote player just turned their mic ON
-        console.log(`✅ ${player.name} turned mic ON`);
+        if (remoteMicOn && !wasRemoteMicOn) {
+            // Remote player just turned their mic ON
+            console.log(`✅ ${player.name} turned mic ON`);
 
-        if (isMicOn) {
-            // Both mics are now ON - establish connection
-            console.log('🔗 Both mics ON - establishing connection');
-            shouldBeConnected = true;
-            initiateCall();
-        } else {
-            // I'm OFF, remote is ON
-            callStatus.textContent = `${player.name}'s mic is ON`;
-            audioCallContainer.classList.add('active');
+            if (isMicOn) {
+                // Both mics are now ON - establish connection
+                console.log('🔗 Both mics ON - establishing connection');
+                shouldBeConnected = true;
+                initiateCall();
+            } else {
+                // I'm OFF, remote is ON
+                if (callStatus) callStatus.textContent = `${player.name}'s mic is ON`;
+                if (audioCallContainer) audioCallContainer.classList.add('active');
+            }
+        } else if (!remoteMicOn && wasRemoteMicOn) {
+            // Remote player just turned their mic OFF
+            console.log(`🔇 ${player.name} turned mic OFF`);
+            shouldBeConnected = false;
+            cleanupPeerConnection();
+
+            if (isMicOn) {
+                if (callStatus) callStatus.textContent = 'Mic ON - Waiting for other player';
+            } else {
+                if (callStatus) callStatus.textContent = 'Mic System Ready';
+                if (audioCallContainer) audioCallContainer.classList.remove('active');
+            }
         }
-    } else if (!remoteMicOn && wasRemoteMicOn) {
-        // Remote player just turned their mic OFF
-        console.log(`🔇 ${player.name} turned mic OFF`);
+
+        updateConnectionStatus();
+    });
+
+    // Handle player disconnection - reset mic states
+    socket.on('player-disconnected', () => {
+        remoteMicOn = false;
         shouldBeConnected = false;
         cleanupPeerConnection();
-
         if (isMicOn) {
-            callStatus.textContent = 'Mic ON - Waiting for other player';
+            stopMic();
+        }
+        alert('The other player disconnected. Game over.');
+        window.location.reload();
+    });
+
+    socket.on('incoming-call', async ({ offer, caller }) => {
+        console.log('📞 Incoming call from:', caller.name);
+
+        // Only accept call if my mic is ON
+        if (!isMicOn) {
+            console.log('⚠️ Ignoring call - my mic is OFF');
+            return;
+        }
+
+        try {
+            cleanupPeerConnection();
+            setupPeerConnection();
+
+            // Add local audio tracks
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
+
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+            // Process queued ICE candidates
+            while (iceCandidateQueue.length > 0) {
+                const candidate = iceCandidateQueue.shift();
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.warn('ICE error:', e));
+            }
+
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+
+            socket.emit('call-answer', { roomCode: currentRoom, answer });
+            if (callStatus) callStatus.textContent = 'Connecting...';
+        } catch (e) {
+            console.error('❌ Failed to answer call:', e);
+            if (callStatus) callStatus.textContent = 'Connection failed';
+        }
+    });
+
+    socket.on('call-answered', async ({ answer }) => {
+        if (!peerConnection) return;
+        console.log('✅ Call answered by remote player');
+
+        try {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+
+            // Process queued ICE candidates
+            while (iceCandidateQueue.length > 0) {
+                const candidate = iceCandidateQueue.shift();
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.warn('ICE error:', e));
+            }
+        } catch (e) {
+            console.error('❌ Remote description error:', e);
+        }
+    });
+
+    socket.on('remote-ice-candidate', async ({ candidate }) => {
+        if (peerConnection && peerConnection.remoteDescription) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.warn('ICE error:', e));
         } else {
-            callStatus.textContent = 'Mic System Ready';
-            audioCallContainer.classList.remove('active');
+            // Queue candidates if remote description not set yet
+            iceCandidateQueue.push(candidate);
         }
-    }
-
-    updateConnectionStatus();
-});
-
-// Handle player disconnection - reset mic states
-socket.on('player-disconnected', () => {
-    remoteMicOn = false;
-    shouldBeConnected = false;
-    cleanupPeerConnection();
-    if (isMicOn) {
-        stopMic();
-    }
-    alert('The other player disconnected. Game over.');
-    window.location.reload();
-});
-
-socket.on('incoming-call', async ({ offer, caller }) => {
-    console.log('📞 Incoming call from:', caller.name);
-
-    // Only accept call if my mic is ON
-    if (!isMicOn) {
-        console.log('⚠️ Ignoring call - my mic is OFF');
-        return;
-    }
-
-    try {
-        cleanupPeerConnection();
-        setupPeerConnection();
-
-        // Add local audio tracks
-        if (localStream) {
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
-        }
-
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-
-        // Process queued ICE candidates
-        while (iceCandidateQueue.length > 0) {
-            const candidate = iceCandidateQueue.shift();
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.warn('ICE error:', e));
-        }
-
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-
-        socket.emit('call-answer', { roomCode: currentRoom, answer });
-        callStatus.textContent = 'Connecting...';
-    } catch (e) {
-        console.error('❌ Failed to answer call:', e);
-        callStatus.textContent = 'Connection failed';
-    }
-});
-
-socket.on('call-answered', async ({ answer }) => {
-    if (!peerConnection) return;
-    console.log('✅ Call answered by remote player');
-
-    try {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-
-        // Process queued ICE candidates
-        while (iceCandidateQueue.length > 0) {
-            const candidate = iceCandidateQueue.shift();
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.warn('ICE error:', e));
-        }
-    } catch (e) {
-        console.error('❌ Remote description error:', e);
-    }
-});
-
-socket.on('remote-ice-candidate', async ({ candidate }) => {
-    if (peerConnection && peerConnection.remoteDescription) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.warn('ICE error:', e));
-    } else {
-        // Queue candidates if remote description not set yet
-        iceCandidateQueue.push(candidate);
-    }
-});
+    });
+}

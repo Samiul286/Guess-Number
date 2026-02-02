@@ -1,6 +1,15 @@
 // Socket.io initialization
-const BACKEND_URL = 'https://guess-number-jz7q.onrender.com'; // Add your Render URL here after deployment (e.g., 'https://your-app.onrender.com')
-const socket = io(BACKEND_URL);
+const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? ''
+    : 'https://guess-number-jz7q.onrender.com';
+
+let socket;
+try {
+    socket = io(BACKEND_URL);
+    console.log('Socket initialized to:', BACKEND_URL || 'Local Server');
+} catch (e) {
+    console.error('Socket.io failed to initialize:', e);
+}
 
 // Game state variables
 let currentRoom = null;
@@ -12,92 +21,101 @@ if (!playerId) {
     localStorage.setItem('guess_game_playerId', playerId);
 }
 
+// Safe element getter
+const getEl = (id) => document.getElementById(id);
+
 // Screen elements
 const screens = {
-    lobby: document.getElementById('lobbyScreen'),
-    waiting: document.getElementById('waitingScreen'),
-    setSecret: document.getElementById('setSecretScreen'),
-    guessing: document.getElementById('guessingScreen'),
-    waitingGuess: document.getElementById('waitingGuessScreen'),
-    win: document.getElementById('winScreen')
+    lobby: getEl('lobbyScreen'),
+    waiting: getEl('waitingScreen'),
+    setSecret: getEl('setSecretScreen'),
+    guessing: getEl('guessingScreen'),
+    waitingGuess: getEl('waitingGuessScreen'),
+    win: getEl('winScreen')
 };
 
 // Lobby elements
-const playerNameInput = document.getElementById('playerName');
-const createRoomBtn = document.getElementById('createRoomBtn');
-const joinRoomBtn = document.getElementById('joinRoomBtn');
-const joinRoomInput = document.getElementById('joinRoomInput');
-const roomCodeInput = document.getElementById('roomCodeInput');
-const joinRoomSubmit = document.getElementById('joinRoomSubmit');
+const playerNameInput = getEl('playerName');
+const createRoomBtn = getEl('createRoomBtn');
+const joinRoomBtn = getEl('joinRoomBtn');
+const joinRoomInput = getEl('joinRoomInput');
+const roomCodeInput = getEl('roomCodeInput');
+const joinRoomSubmit = getEl('joinRoomSubmit');
 
 // Waiting screen elements
-const displayRoomCode = document.getElementById('displayRoomCode');
-const copyCodeBtn = document.getElementById('copyCodeBtn');
+const displayRoomCode = getEl('displayRoomCode');
+const copyCodeBtn = getEl('copyCodeBtn');
 
 // Set secret screen elements
-const secretNumberInput = document.getElementById('secretNumberInput');
-const setSecretBtn = document.getElementById('setSecretBtn');
+const secretNumberInput = getEl('secretNumberInput');
+const setSecretBtn = getEl('setSecretBtn');
 
 // Guessing screen elements
-const guessInput = document.getElementById('guessInput');
-const submitGuessBtn = document.getElementById('submitGuessBtn');
-const guessCounter = document.getElementById('guessCounter');
-const clueDisplay = document.getElementById('clueDisplay');
-const guessHistoryList = document.getElementById('guessHistoryList');
-const guessingRange = document.getElementById('guessingRange');
+const guessInput = getEl('guessInput');
+const submitGuessBtn = getEl('submitGuessBtn');
+const guessCounter = getEl('guessCounter');
+const clueDisplay = getEl('clueDisplay');
+const guessHistoryList = getEl('guessHistoryList');
+const guessingRange = getEl('guessingRange');
 
 // Setter waiting screen elements
-const setterGuessCounter = document.getElementById('setterGuessCounter');
-const setterGuessHistoryList = document.getElementById('setterGuessHistoryList');
+const setterGuessCounter = getEl('setterGuessCounter');
+const setterGuessHistoryList = getEl('setterGuessHistoryList');
 
 // Win screen elements
-const revealedNumber = document.getElementById('revealedNumber');
-const totalGuesses = document.getElementById('totalGuesses');
-const nextRoundBtn = document.getElementById('nextRoundBtn');
+const revealedNumber = getEl('revealedNumber');
+const totalGuesses = getEl('totalGuesses');
+const nextRoundBtn = getEl('nextRoundBtn');
 
 // --- Game Logic ---
+if (createRoomBtn) {
+    createRoomBtn.addEventListener('click', () => {
+        const name = playerNameInput.value.trim();
+        if (!name) return alert('Please enter your name');
 
-// Create Room
-createRoomBtn.addEventListener('click', () => {
-    const name = playerNameInput.value.trim();
-    if (!name) return alert('Please enter your name');
+        playerName = name;
+        if (socket) socket.emit('create-room', { playerName, playerId });
+    });
+}
 
-    playerName = name;
-    socket.emit('create-room', { playerName, playerId });
-});
+if (socket) {
+    socket.on('room-created', (room) => {
+        currentRoom = room.code;
+        playerRole = 'setter';
+        if (displayRoomCode) displayRoomCode.textContent = room.code;
+        showScreen('waiting');
+    });
 
-socket.on('room-created', (room) => {
-    currentRoom = room.code;
-    playerRole = 'setter';
-    displayRoomCode.textContent = room.code;
-    showScreen('waiting');
-});
+    socket.on('room-updated', (room) => {
+        handleStateChange(room);
+    });
+
+    socket.on('error', (msg) => {
+        alert(msg);
+    });
+}
 
 // Join Room
-joinRoomBtn.addEventListener('click', () => {
-    joinRoomInput.classList.toggle('hidden');
-});
+if (joinRoomBtn) {
+    joinRoomBtn.addEventListener('click', () => {
+        if (joinRoomInput) joinRoomInput.classList.toggle('hidden');
+    });
+}
 
-joinRoomSubmit.addEventListener('click', () => {
-    const name = playerNameInput.value.trim();
-    const code = roomCodeInput.value.trim().toUpperCase();
+if (joinRoomSubmit) {
+    joinRoomSubmit.addEventListener('click', () => {
+        const name = playerNameInput.value.trim();
+        const code = roomCodeInput.value.trim().toUpperCase();
 
-    if (!name || !code) return alert('Please enter name and room code');
+        if (!name || !code) return alert('Please enter name and room code');
 
-    playerName = name;
-    currentRoom = code;
-    playerRole = 'guesser';
+        playerName = name;
+        currentRoom = code;
+        playerRole = 'guesser';
 
-    socket.emit('join-room', { playerName, playerId, roomCode: code });
-});
-
-socket.on('room-updated', (room) => {
-    handleStateChange(room);
-});
-
-socket.on('error', (msg) => {
-    alert(msg);
-});
+        if (socket) socket.emit('join-room', { playerName, playerId, roomCode: code });
+    });
+}
 
 function handleStateChange(room) {
     if (!currentRoom) currentRoom = room.code;
@@ -134,27 +152,32 @@ function updateWaitingUI(room, message) {
     const statusText = document.querySelector('#waitingGuessScreen p');
     if (statusText) statusText.textContent = message;
 
-    setterGuessCounter.textContent = room.guessCount || 0;
+    if (setterGuessCounter) setterGuessCounter.textContent = room.guessCount || 0;
     renderHistory(room.guesses, setterGuessHistoryList);
 }
 
 function updateGuessingUI(room) {
-    guessCounter.textContent = room.guessCount || 0;
-    guessingRange.textContent = '1-100';
+    if (guessCounter) guessCounter.textContent = room.guessCount || 0;
+    if (guessingRange) guessingRange.textContent = '1-100';
 
     const lastGuess = room.guesses && room.guesses.length > 0 ? room.guesses[room.guesses.length - 1] : null;
     if (lastGuess) {
-        clueDisplay.textContent = lastGuess.clue;
-        clueDisplay.className = 'clue-box ' + (lastGuess.clue === 'Upore' ? 'upore' : 'niche');
+        if (clueDisplay) {
+            clueDisplay.textContent = lastGuess.clue;
+            clueDisplay.className = 'clue-box ' + (lastGuess.clue === 'Upore' ? 'upore' : 'niche');
+        }
     } else {
-        clueDisplay.textContent = 'Enter your guess';
-        clueDisplay.className = 'clue-box';
+        if (clueDisplay) {
+            clueDisplay.textContent = 'Enter your guess';
+            clueDisplay.className = 'clue-box';
+        }
     }
 
     renderHistory(room.guesses, guessHistoryList);
 }
 
 function renderHistory(guesses, listElement) {
+    if (!listElement) return;
     listElement.innerHTML = '';
     if (!guesses) return;
 
@@ -172,47 +195,57 @@ function renderHistory(guesses, listElement) {
 }
 
 function showWinScreen(room) {
-    revealedNumber.textContent = room.secretNumber || '?';
-    totalGuesses.textContent = room.guessCount || 0;
-    nextRoundBtn.disabled = false;
+    if (revealedNumber) revealedNumber.textContent = room.secretNumber || '?';
+    if (totalGuesses) totalGuesses.textContent = room.guessCount || 0;
+    if (nextRoundBtn) nextRoundBtn.disabled = false;
     showScreen('win');
 }
 
 // Set Secret Number
-setSecretBtn.addEventListener('click', () => {
-    const number = parseInt(secretNumberInput.value);
-    if (!number || number < 1 || number > 100) return alert('Enter 1-100');
+if (setSecretBtn) {
+    setSecretBtn.addEventListener('click', () => {
+        const number = parseInt(secretNumberInput.value);
+        if (!number || number < 1 || number > 100) return alert('Enter 1-100');
 
-    socket.emit('set-secret', { roomCode: currentRoom, number });
-});
+        if (socket) socket.emit('set-secret', { roomCode: currentRoom, number });
+    });
+}
 
 // Submit Guess
-submitGuessBtn.addEventListener('click', () => {
-    const guess = parseInt(guessInput.value);
-    if (!guess || guess < 1 || guess > 100) return alert('Enter 1-100');
+if (submitGuessBtn) {
+    submitGuessBtn.addEventListener('click', () => {
+        const guess = parseInt(guessInput.value);
+        if (!guess || guess < 1 || guess > 100) return alert('Enter 1-100');
 
-    socket.emit('submit-guess', { roomCode: currentRoom, guess });
-    guessInput.value = '';
-});
+        if (socket) socket.emit('submit-guess', { roomCode: currentRoom, guess });
+        if (guessInput) guessInput.value = '';
+    });
+}
 
 // Next Round
-nextRoundBtn.addEventListener('click', () => {
-    if (nextRoundBtn.disabled) return;
-    nextRoundBtn.disabled = true;
-    socket.emit('next-round', { roomCode: currentRoom });
-});
+if (nextRoundBtn) {
+    nextRoundBtn.addEventListener('click', () => {
+        if (nextRoundBtn.disabled) return;
+        nextRoundBtn.disabled = true;
+        if (socket) socket.emit('next-round', { roomCode: currentRoom });
+    });
+}
 
 // UI Helpers
 function showScreen(name) {
-    Object.values(screens).forEach(s => s.classList.remove('active'));
-    screens[name].classList.add('active');
+    Object.values(screens).forEach(s => {
+        if (s) s.classList.remove('active');
+    });
+    if (screens[name]) screens[name].classList.add('active');
 }
 
-copyCodeBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(currentRoom);
-    copyCodeBtn.textContent = 'Copied!';
-    setTimeout(() => copyCodeBtn.textContent = 'Copy Code', 2000);
-});
+if (copyCodeBtn) {
+    copyCodeBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(currentRoom);
+        copyCodeBtn.textContent = 'Copied!';
+        setTimeout(() => { if (copyCodeBtn) copyCodeBtn.textContent = 'Copy Code'; }, 2000);
+    });
+}
 
 // --- Microphone Voice System (Independent Mic Control) ---
 let localStream;
@@ -235,13 +268,15 @@ const servers = {
     iceCandidatePoolSize: 10,
 };
 
-const audioCallContainer = document.getElementById('audioCallContainer');
-const callStatus = document.getElementById('callStatus');
-const micToggleBtn = document.getElementById('micToggleBtn');
-const micLabel = micToggleBtn.querySelector('.mic-label');
-const remoteAudio = document.getElementById('remoteAudio');
+const audioCallContainer = getEl('audioCallContainer');
+const callStatus = getEl('callStatus');
+const micToggleBtn = getEl('micToggleBtn');
+const micLabel = micToggleBtn ? micToggleBtn.querySelector('.mic-label') : null;
+const remoteAudio = getEl('remoteAudio');
 
-micToggleBtn.addEventListener('click', toggleMic);
+if (micToggleBtn) {
+    micToggleBtn.addEventListener('click', toggleMic);
+}
 
 async function toggleMic() {
     if (isMicOn) {
@@ -301,7 +336,7 @@ function stopMic() {
     shouldBeConnected = false;
     micToggleBtn.classList.remove('on');
     micLabel.textContent = 'OFF';
-    
+
     // Stop local audio stream
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
@@ -353,7 +388,7 @@ function cleanupPeerConnection() {
         peerConnection = null;
     }
     iceCandidateQueue = [];
-    
+
     // Clear remote audio
     if (remoteAudio.srcObject) {
         remoteAudio.srcObject = null;
@@ -365,7 +400,7 @@ async function initiateCall() {
         console.log('⚠️ Cannot initiate call - mic not ready');
         return;
     }
-    
+
     console.log('📞 Initiating WebRTC connection...');
     callStatus.textContent = 'Connecting...';
 
@@ -449,7 +484,7 @@ socket.on('remote-mic-update', ({ status, player }) => {
     if (remoteMicOn && !wasRemoteMicOn) {
         // Remote player just turned their mic ON
         console.log(`✅ ${player.name} turned mic ON`);
-        
+
         if (isMicOn) {
             // Both mics are now ON - establish connection
             console.log('🔗 Both mics ON - establishing connection');
@@ -465,7 +500,7 @@ socket.on('remote-mic-update', ({ status, player }) => {
         console.log(`🔇 ${player.name} turned mic OFF`);
         shouldBeConnected = false;
         cleanupPeerConnection();
-        
+
         if (isMicOn) {
             callStatus.textContent = 'Mic ON - Waiting for other player';
         } else {
@@ -473,7 +508,7 @@ socket.on('remote-mic-update', ({ status, player }) => {
             audioCallContainer.classList.remove('active');
         }
     }
-    
+
     updateConnectionStatus();
 });
 
@@ -491,7 +526,7 @@ socket.on('player-disconnected', () => {
 
 socket.on('incoming-call', async ({ offer, caller }) => {
     console.log('📞 Incoming call from:', caller.name);
-    
+
     // Only accept call if my mic is ON
     if (!isMicOn) {
         console.log('⚠️ Ignoring call - my mic is OFF');
@@ -531,10 +566,10 @@ socket.on('incoming-call', async ({ offer, caller }) => {
 socket.on('call-answered', async ({ answer }) => {
     if (!peerConnection) return;
     console.log('✅ Call answered by remote player');
-    
+
     try {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-        
+
         // Process queued ICE candidates
         while (iceCandidateQueue.length > 0) {
             const candidate = iceCandidateQueue.shift();

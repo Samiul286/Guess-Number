@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Guessing Game</title>
+    <!-- Fonts: Outfit (Headings) and Inter (Body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@300;500;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- Background Animated Layer -->
+    <div class="bg-layer">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+        <div class="grid-overlay"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Lobby Screen -->
+        <div id="lobbyScreen" class="screen active card-glass">
+            <div class="card-header">
+                <div class="logo-mark">🎯</div>
+                <h1>Guessing Game</h1>
+                <p class="subtitle">Play with friends in real-time</p>
+            </div>
+
+            <div class="card-body">
+                <div class="input-group">
+                    <label>Player Name</label>
+                    <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
+                    <div class="input-line"></div>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="createRoomBtn" class="btn btn-primary">
+                        <span class="btn-text">Create Room</span>
+                        <div class="btn-glow"></div>
+                    </button>
+                    <button id="joinRoomBtn" class="btn btn-secondary">
+                        <span class="btn-text">Join Room</span>
+                    </button>
+                </div>
+
+                <div id="joinRoomInput" class="input-group hidden fade-in">
+                    <label>Room Code</label>
+                    <div class="join-row">
+                        <input type="text" id="roomCodeInput" placeholder="Enter code" maxlength="6">
+                        <button id="joinRoomSubmit" class="btn btn-icon">➜</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Waiting Screen -->
+        <div id="waitingScreen" class="screen card-glass">
+            <div class="card-header">
+                <h2>Room Created</h2>
+                <div class="pulsing-status">Waiting for Player 2...</div>
+            </div>
+
+            <div class="card-body centered">
+                <div class="room-code-container">
+                    <span class="label-tiny">ROOM CODE</span>
+                    <div class="code-display" id="displayRoomCode">---</div>
+                    <button id="copyCodeBtn" class="btn-ghost">Copy Code</button>
+                </div>
+
+                <div class="loader-container">
+                    <div class="loader-ring"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Set Secret Number Screen -->
+        <div id="setSecretScreen" class="screen card-glass">
+            <div class="card-header">
+                <h2>Set Secret Number</h2>
+                <p class="role-badge setter">You are: Setter</p>
+            </div>
+
+            <div class="card-body">
+                <p class="instruction-text">Enter a number between <br><span class="highlight">1</span> and
+                    <span class="highlight">100</span>
+                </p>
+
+                <div class="input-group huge-input">
+                    <input type="number" id="secretNumberInput" min="1" max="100" placeholder="00">
+                </div>
+
+                <button id="setSecretBtn" class="btn btn-primary full-width">
+                    Set Number
+                </button>
+            </div>
+        </div>
+
+        <!-- Guessing Screen -->
+        <div id="guessingScreen" class="screen card-glass">
+            <div class="card-header">
+                <div class="game-info-row">
+                    <span class="range-pill" id="guessingRange">1 - 100</span>
+                    <span class="guesses-pill">Guesses: <span id="guessCounter">0</span></span>
+                </div>
+                <h2>Guess the Number</h2>
+            </div>
+
+            <div class="card-body">
+                <div id="clueDisplay" class="clue-box">
+                    <span class="placeholder-text">Waiting for your guess...</span>
+                </div>
+
+                <div class="input-group guess-row">
+                    <input type="number" id="guessInput" min="1" max="100" placeholder="?">
+                    <button id="submitGuessBtn" class="btn btn-primary">Guess</button>
+                </div>
+
+                <div class="history-panel">
+                    <div class="history-label">Guess History</div>
+                    <div id="guessHistoryList" class="history-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Waiting for Guess Screen (for setter) -->
+        <div id="waitingGuessScreen" class="screen card-glass">
+            <div class="card-header">
+                <h2>Waiting for Guess</h2>
+                <p class="role-badge setter">You are: Setter</p>
+            </div>
+
+            <div class="card-body">
+                <div class="status-monitor">
+                    <div class="monitor-ring"></div>
+                    <p>The other player is guessing...</p>
+                </div>
+
+                <div class="history-panel">
+                    <div class="history-header">
+                        <span>Attempts</span>
+                        <span id="setterGuessCounter" class="highlight">0</span>
+                    </div>
+                    <div id="setterGuessHistoryList" class="history-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Win Screen -->
+        <div id="winScreen" class="screen card-glass">
+            <div class="card-header">
+                <div class="confetti-icon">🎉</div>
+                <h2>Correct!</h2>
+            </div>
+
+            <div class="card-body">
+                <div class="result-box">
+                    <div class="result-label">The Number Was</div>
+                    <div class="result-number" id="revealedNumber">?</div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-box">
+                        <span class="stat-label">Total Guesses</span>
+                        <span class="stat-num" id="totalGuesses">0</span>
+                    </div>
+                </div>
+
+                <button id="nextRoundBtn" class="btn btn-primary full-width">
+                    Start Next Round
+                </button>
+            </div>
+        </div>
+
+        <!-- Copyright Footer -->
+        <footer class="app-footer">
+            <p>Copyright &copy; 2026 It'z Sami</p>
+        </footer>
+    </div>
+
+    <!-- Microphone Voice System UI -->
+    <div id="audioCallContainer" class="audio-call-bar">
+        <div class="call-info">
+            <div class="call-pulse"></div>
+            <span id="callStatus">Mic System Ready</span>
+        </div>
+        <div class="call-controls">
+            <button id="micToggleBtn" class="mic-btn off" title="Toggle Microphone">
+                <div class="mic-icon-wrapper">
+                    <svg class="mic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path class="mic-body" d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                        <path class="mic-stand" d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line class="mic-stand-base" x1="12" y1="19" x2="12" y2="22"></line>
+                        <line class="mic-stand-foot" x1="8" y1="22" x2="16" y2="22"></line>
+                        <line class="mic-slash" x1="2" y1="2" x2="22" y2="22" style="display: block;"></line>
+                    </svg>
+                </div>
+                <span class="mic-label">OFF</span>
+            </button>
+        </div>
+        <audio id="remoteAudio" autoplay></audio>
+    </div>
+
+    <!-- Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script src="game.js"></script>
+</body>
+
+</html>

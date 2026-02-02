@@ -83,6 +83,7 @@ if (socket) {
         currentRoom = room.code;
         playerRole = 'setter';
         if (displayRoomCode) displayRoomCode.textContent = room.code;
+        if (audioCallContainer) audioCallContainer.classList.remove('hidden');
         showScreen('waiting');
     });
 
@@ -119,6 +120,11 @@ if (joinRoomSubmit) {
 
 function handleStateChange(room) {
     if (!currentRoom) currentRoom = room.code;
+
+    // Show mic bar once we are in a room
+    if (currentRoom && audioCallContainer) {
+        audioCallContainer.classList.remove('hidden');
+    }
 
     // Always sync player role from server data
     if (room.player1 && room.player1.id === playerId) playerRole = room.player1.role;

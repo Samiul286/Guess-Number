@@ -9,7 +9,10 @@ const io = new Server(server, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
-    }
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    connectTimeout: 45000
 });
 
 const PORT = process.env.PORT || 3000;
@@ -139,13 +142,72 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
-        // Clean up rooms if a player leaves
+
+        // Find if this socket belongs to any room
         for (const [roomCode, room] of rooms.entries()) {
-            if (room.player1.socketId === socket.id || (room.player2 && room.player2.socketId === socket.id)) {
-                io.to(roomCode).emit('player-disconnected');
-                rooms.delete(roomCode);
-                console.log(`Room ${roomCode} deleted due to disconnection`);
+            const isP1 = room.player1.socketId === socket.id;
+            const isP2 = room.player2 && room.player2.socketId === socket.id;
+
+            if (isP1 || isP2) {
+                console.log(`Player potentially disconnected from room ${roomCode}. Starting 60s grace period.`);
+
+                // Mark the player as disconnected but don't delete yet
+                io.to(roomCode).emit('player-reconnecting', {
+                    playerId: isP1 ? room.player1.id : room.player2.id
+                });
+
+                // Clear any existing timeout for this room
+                if (room.cleanupTimeout) clearTimeout(room.cleanupTimeout);
+
+                // Set a timeout to delete the room if they don't reconnect
+                room.cleanupTimeout = setTimeout(() => {
+                    const currentRoom = rooms.get(roomCode);
+                    if (!currentRoom) return;
+
+                    // Final check: if the socket ID is still the same as the one that disconnected, then they never reconnected
+                    const p1StillGone = currentRoom.player1.socketId === socket.id;
+                    const p2StillGone = currentRoom.player2 && currentRoom.player2.socketId === socket.id;
+
+                    if (p1StillGone || p2StillGone) {
+                        io.to(roomCode).emit('player-disconnected');
+                        rooms.delete(roomCode);
+                        console.log(`Room ${roomCode} deleted after grace period expired`);
+                    }
+                }, 60000); // 60 second grace period
+
+                break;
             }
+        }
+    });
+
+    // Reconnection/Session Recovery handler
+    socket.on('recover-session', ({ playerId, roomCode }) => {
+        const room = rooms.get(roomCode);
+        if (room) {
+            let recovered = false;
+
+            if (room.player1.id === playerId) {
+                room.player1.socketId = socket.id;
+                recovered = true;
+            } else if (room.player2 && room.player2.id === playerId) {
+                room.player2.socketId = socket.id;
+                recovered = true;
+            }
+
+            if (recovered) {
+                socket.join(roomCode);
+                if (room.cleanupTimeout) {
+                    clearTimeout(room.cleanupTimeout);
+                    room.cleanupTimeout = null;
+                }
+                socket.emit('session-recovered', room);
+                io.to(roomCode).emit('room-updated', room);
+                console.log(`Player ${playerId} recovered session in room ${roomCode}`);
+            } else {
+                socket.emit('error', 'Session could not be recovered');
+            }
+        } else {
+            socket.emit('error', 'Room no longer exists');
         }
     });
 });

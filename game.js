@@ -91,8 +91,50 @@ if (socket) {
         handleStateChange(room);
     });
 
+    socket.on('player-reconnecting', ({ playerId: reconnectingPlayerId }) => {
+        if (reconnectingPlayerId !== playerId) {
+            console.log('Other player is reconnecting...');
+            // Show a non-blocking notification or update UI
+            const statusText = document.querySelector('#waitingGuessScreen p') || document.querySelector('#waitingScreen p');
+            if (statusText) {
+                statusText.setAttribute('data-original-text', statusText.textContent);
+                statusText.textContent = 'Other player disconnected. Waiting for them to reconnect...';
+            }
+        }
+    });
+
+    socket.on('session-recovered', (room) => {
+        console.log('Session recovered successfully');
+        handleStateChange(room);
+        // Restore original text if it was modified
+        const statusText = document.querySelector('#waitingGuessScreen p') || document.querySelector('#waitingScreen p');
+        if (statusText && statusText.hasAttribute('data-original-text')) {
+            statusText.textContent = statusText.getAttribute('data-original-text');
+        }
+    });
+
+    socket.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason);
+        if (reason === 'io server disconnect' || reason === 'transport close' || reason === 'ping timeout') {
+            // Attempt to reconnect if it wasn't a deliberate disconnect
+            console.log('Attempting to reconnect...');
+        }
+    });
+
+    socket.on('connect', () => {
+        console.log('Socket connected/reconnected');
+        if (currentRoom && playerId) {
+            console.log('Attempting to recover session...');
+            socket.emit('recover-session', { playerId, roomCode: currentRoom });
+        }
+    });
+
     socket.on('error', (msg) => {
-        alert(msg);
+        console.error('Socket error:', msg);
+        // Don't alert if it's a recovery error, might just be transient
+        if (msg !== 'Session could not be recovered' && msg !== 'Room no longer exists') {
+            alert(msg);
+        }
     });
 }
 
@@ -521,6 +563,7 @@ if (socket) {
 
     // Handle player disconnection - reset mic states
     socket.on('player-disconnected', () => {
+        console.log('Other player disconnected permanently');
         remoteMicOn = false;
         shouldBeConnected = false;
         cleanupPeerConnection();
